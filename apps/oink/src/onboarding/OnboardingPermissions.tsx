@@ -59,13 +59,13 @@ export function OnboardingPermissions({ preferences, perms, onGrant, onOpenSetti
     setSaving(true);
     try {
       const status = preferences.launchStatus ?? await api.launchAtLoginStatus();
-      if (status.state === 'unavailable' && status.problem === 'system_unavailable') throw new Error('unavailable');
-      if (status.state !== 'unavailable') {
+      if (status && status.state !== 'unavailable') {
         await preferences.confirmLaunchAtLogin(launch ?? initialLaunch(status)!);
       }
       onDone();
     } catch {
-      agent.fail('unavailable');
+      onDone();
+    } finally {
       busy.current = false;
       setSaving(false);
     }

@@ -195,6 +195,9 @@ pub(crate) fn reset_if_fresh(data: &Path, mut reset: impl FnMut() -> anyhow::Res
 
 #[cfg(target_os = "macos")]
 pub(crate) fn prepare(data: &Path) -> anyhow::Result<Option<Worker>> {
+    if objc2_foundation::NSProcessInfo::processInfo().operatingSystemVersion().majorVersion < 14 {
+        return Ok(None);
+    }
     let home = std::env::var_os("HOME").ok_or_else(|| anyhow::anyhow!("HOME unavailable"))?;
     let installed = Path::new("/Applications/Oink.app/Contents/MacOS");
     // Isolated instances and bare development executables never manipulate the

@@ -80,6 +80,12 @@ pub(crate) struct State {
 
 impl State {
     pub(crate) fn new(_data_dir: &Path) -> Self {
+        #[cfg(target_os = "macos")]
+        if objc2_foundation::NSProcessInfo::processInfo().operatingSystemVersion().majorVersion < 14 {
+            let mut state = Self::fresh();
+            state.status.state = Phase::Unsupported;
+            return state;
+        }
         let mut state = Self::fresh();
         state.startup_error = startup::failure();
         if state.startup_error.is_some() {
@@ -259,6 +265,10 @@ pub(crate) fn report(node: &Node) {
 }
 
 pub(crate) fn spawn(node: &Node) -> tokio::task::JoinHandle<()> {
+    #[cfg(target_os = "macos")]
+    if objc2_foundation::NSProcessInfo::processInfo().operatingSystemVersion().majorVersion < 14 {
+        return tokio::spawn(async move {});
+    }
     let weak = Arc::downgrade(&node.inner);
     let mut stop = node.stop_receiver();
     let wake = node.inner.file_provider_wake.clone();

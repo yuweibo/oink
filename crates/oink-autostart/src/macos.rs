@@ -33,7 +33,7 @@ pub(crate) fn status() -> LaunchAtLoginStatus {
         return LaunchAtLoginStatus::unavailable(problem);
     }
     let Some(cls) = AnyClass::get(c"SMAppService") else {
-        return LaunchAtLoginStatus::unavailable(LaunchAtLoginProblem::SystemUnavailable);
+        return LaunchAtLoginStatus::new(LaunchAtLoginState::Disabled, None);
     };
     let service: *mut AnyObject = unsafe { msg_send![cls, mainAppService] };
     if service.is_null() {
@@ -58,7 +58,7 @@ pub(crate) fn set_enabled(enabled: bool) -> Result<LaunchAtLoginStatus, String> 
         return Err(problem.code().into());
     }
     let Some(cls) = AnyClass::get(c"SMAppService") else {
-        return Err(LaunchAtLoginProblem::SystemUnavailable.code().into());
+        return Ok(LaunchAtLoginStatus::new(LaunchAtLoginState::Disabled, None));
     };
     let service: *mut AnyObject = unsafe { msg_send![cls, mainAppService] };
     if service.is_null() {
