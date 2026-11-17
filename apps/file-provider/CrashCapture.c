@@ -8,6 +8,15 @@
 #include <string.h>
 #include <time.h>
 #include <sys/stat.h>
+#include <libproc.h>
+
+uint64_t oink_process_start_time(uint32_t pid) {
+    struct proc_bsdinfo info;
+    if (proc_pidinfo((int)pid, PROC_PIDTBSDINFO, 0, &info, sizeof(info)) == sizeof(info)) {
+        return info.pbi_start_tvsec;
+    }
+    return 0;
+}
 
 static atomic_flag busy = ATOMIC_FLAG_INIT;
 static _Atomic int active = 0;

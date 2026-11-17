@@ -4,7 +4,7 @@ if(NOT APPLE)
   message(FATAL_ERROR "The HAL plugin requires macOS")
 endif()
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_OSX_DEPLOYMENT_TARGET "14.2")
+set(CMAKE_OSX_DEPLOYMENT_TARGET "12.3")
 include(FetchContent)
 FetchContent_Declare(aspl
   URL https://codeload.github.com/gavv/libASPL/tar.gz/633e0f70203edd87d320fc5a3cae901e1363aac5

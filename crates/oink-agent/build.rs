@@ -6,7 +6,7 @@ fn main() {
             .file("native/local-update.m")
             .flag("-fobjc-arc")
             .flag("-fblocks")
-            .flag("-mmacosx-version-min=14.2")
+            .flag("-mmacosx-version-min=12.3")
             .warnings(true)
             .compile("oink_permissions");
         println!("cargo:rerun-if-changed=native/local-update.m");

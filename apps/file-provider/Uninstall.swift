@@ -67,9 +67,11 @@ func uninstallLocations(home: URL) -> [URL] {
 }
 
 func unregisterOinkLoginItem() async throws {
-    let service = SMAppService.mainApp
-    if service.status == .enabled || service.status == .requiresApproval { try await service.unregister() }
-    guard service.status == .notRegistered || service.status == .notFound else { throw CocoaError(.featureUnsupported) }
+    if #available(macOS 13.0, *) {
+        let service = SMAppService.mainApp
+        if service.status == .enabled || service.status == .requiresApproval { try await service.unregister() }
+        guard service.status == .notRegistered || service.status == .notFound else { throw CocoaError(.featureUnsupported) }
+    }
 }
 
 // libproc reports executable paths, including sandboxed appex processes which

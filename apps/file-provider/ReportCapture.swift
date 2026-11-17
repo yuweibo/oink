@@ -5,6 +5,7 @@ import MachO
 @_silgen_name("oink_report_arm") private func armCapsule(_ path: UnsafePointer<CChar>, _ generation: UInt64,
     _ capability: UnsafePointer<UInt8>, _ version: UnsafePointer<UInt16>, _ build: UInt32, _ major: UInt8) -> Int32
 @_silgen_name("oink_report_disarm") private func disarmCapsule()
+@_silgen_name("oink_process_start_time") private func oink_process_start_time(_ pid: UInt32) -> UInt64
 
 // Only fixed numeric metadata in the private App Group inbox. All extraction,
 // consent checks, quotas and HTTPS remain owned by the per-user background agent.
@@ -24,10 +25,8 @@ private struct ReportLifetime: Encodable {
 private struct ReportRegistration: Encodable { let schema: UInt16 = 1; let capability: [UInt8]; let lifetime: ReportLifetime }
 
 private func launched(_ pid: UInt32) -> UInt64? {
-    var info = proc_bsdinfo()
-    let size = MemoryLayout<proc_bsdinfo>.size
-    guard proc_pidinfo(Int32(pid), PROC_PIDTBSDINFO, 0, &info, Int32(size)) == size else { return nil }
-    return info.pbi_start_tvsec
+    let t = oink_process_start_time(pid)
+    return t > 0 ? t : nil
 }
 private func shippedDebugID() -> [UInt8]? {
     let header = #dsohandle.assumingMemoryBound(to: mach_header_64.self)

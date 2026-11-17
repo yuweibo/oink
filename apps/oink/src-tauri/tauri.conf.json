@@ -28,7 +28,7 @@
     "category": "Utility",
     "shortDescription": "Share keyboard, mouse and clipboard between Mac and Windows",
     "macOS": {
-      "minimumSystemVersion": "14.2",
+      "minimumSystemVersion": "12.3",
       "infoPlist": "Info.plist"
     },
     "windows": {

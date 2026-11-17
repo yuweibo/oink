@@ -1,8 +1,46 @@
 // Core Audio system-output tap. No default-device or endpoint-volume changes.
 #import <Foundation/Foundation.h>
 #import <CoreAudio/CoreAudio.h>
+#if __has_include(<CoreAudio/AudioHardwareTapping.h>)
 #import <CoreAudio/AudioHardwareTapping.h>
+#endif
+#if __has_include(<CoreAudio/CATapDescription.h>)
 #import <CoreAudio/CATapDescription.h>
+#else
+#define kAudioHardwarePropertyTranslateUIDToTap ('tuid')
+#define kAudioHardwarePropertyTranslatePIDToProcessObject ('ppid')
+#define kAudioTapPropertyDescription ('tpdc')
+#define kAudioTapPropertyFormat ('tpft')
+#define kAudioSubTapPropertyDriftCompensation ('drft')
+#define kAudioSubTapPropertyDriftCompensationQuality ('drfq')
+#define kAudioSubTapPropertyExtraLatency ('xltc')
+#define kAudioAggregateDevicePropertyTapList ('tapl')
+#define kAudioSubTapClassID ('subt')
+#define kAudioAggregateDevicePropertySubTapList ('sbtl')
+#define kAudioAggregateDeviceTapAutoStartKey "AutoStart"
+#define kAudioAggregateDeviceTapListKey "TapList"
+#define kAudioSubTapUIDKey "uid"
+#define kAudioSubTapDriftCompensationKey "drift"
+
+typedef enum CATapMuteBehavior { CATapUnmuted = 0 } CATapMuteBehavior;
+@interface CATapDescription : NSObject
+@property (copy, readwrite) NSString *name;
+@property (readwrite) BOOL privateTap;
+@property (copy, readonly) NSString *deviceUID;
+@property (copy, readonly) NSUUID *stream;
+@property (readonly) BOOL exclusive;
+@property (readonly) BOOL mixdown;
+@property (readonly) BOOL mono;
+@property (readonly) NSUUID *UUID;
+@property (readwrite) CATapMuteBehavior muteBehavior;
+- (instancetype)initExcludingProcesses:(NSArray<NSNumber *> *)processes;
+- (instancetype)initStereoMixdownOfProcesses:(NSArray<NSNumber *> *)processes;
+- (instancetype)initStereoGlobalTapButExcludeProcesses:(NSArray<NSNumber *> *)processes;
+- (instancetype)initExcludingProcesses:(NSArray<NSNumber *> *)processes andDeviceUID:(NSString *)deviceUID withStream:(NSUUID *)stream;
+@end
+extern OSStatus AudioHardwareCreateProcessTap(CATapDescription *inDescription, AudioObjectID *outTapID) __attribute__((weak_import));
+extern OSStatus AudioHardwareDestroyProcessTap(AudioObjectID inTapID) __attribute__((weak_import));
+#endif
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -325,7 +363,7 @@ int32_t oink_audio_capture_stop(void *opaque, char *error, size_t capacity) {
     }
     if (capture->tap) {
         if (@available(macOS 14.2, *)) {
-            capture_cleanup_failure((capture_same_service(capture) ? AudioHardwareDestroyProcessTap(capture->tap) : kAudioHardwareBadObjectError),
+            capture_cleanup_failure((capture_same_service(capture) && AudioHardwareDestroyProcessTap ? AudioHardwareDestroyProcessTap(capture->tap) : kAudioHardwareBadObjectError),
                                     "AudioHardwareDestroyProcessTap", &status, &missing_only, error, capacity);
         }
     }
@@ -903,6 +941,10 @@ void *oink_audio_capture_start(bool mute, uint32_t requested_frames, uint32_t ca
             // 14/26 confirm process-tap PCM is upstream of hardware mute/level.
             description.muteBehavior = CATapUnmuted;
             stage = "Create system audio tap (requires System Audio Recording permission)";
+            if (!AudioHardwareCreateProcessTap) {
+                status = kAudioHardwareNotRunningError;
+                goto failed;
+            }
             status = AudioHardwareCreateProcessTap(description, &capture->tap);
             if (status != noErr) goto failed;
             capture->tap_uid = CFBridgingRetain(description.UUID.UUIDString);

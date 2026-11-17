@@ -452,6 +452,7 @@ final class Item: NSObject, NSFileProviderItem {
         if record.node != nil || record.id.contains("-local-") {value.formUnion([.allowsRenaming,.allowsReparenting])}
         return value
     }
+    @available(macOS 13.0, *)
     var contentPolicy: NSFileProviderContentPolicy {
         record.keep_local == true ? .downloadEagerlyAndKeepDownloaded : .downloadLazily
     }
@@ -1180,7 +1181,13 @@ func receivedCreate(_ template: NSFileProviderItem, fields: NSFileProviderItemFi
         }
         let directory = (template.contentType ?? nil)?.conforms(to: .folder) == true
         guard (template.contentType ?? nil)?.conforms(to: .symbolicLink) != true else { throw CocoaError(.fileWriteNoPermission) }
-        guard directory || contents != nil else { throw NSFileProviderError(.excludedFromSync) }
+        guard directory || contents != nil else {
+            if #available(macOS 13.0, *) {
+                throw NSFileProviderError(.excludedFromSync)
+            } else {
+                throw CocoaError(.fileWriteNoPermission)
+            }
+        }
         let size = try contents.map(receivedContentSize)
         if let old = old, old.directory != directory { throw CocoaError(.fileWriteNoPermission) }
         let id = old?.id ?? key + "-local-" + UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()

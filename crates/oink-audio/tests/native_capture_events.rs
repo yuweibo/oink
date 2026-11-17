@@ -69,7 +69,7 @@ fn native_tap_never_owns_local_silence() {
             "clang",
             "-fobjc-arc",
             "-std=c11",
-            "-mmacosx-version-min=14.2",
+            "-mmacosx-version-min=12.3",
             "-Wall",
             "-Werror",
             "-framework",

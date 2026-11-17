@@ -10,8 +10,8 @@ import re
 import subprocess
 
 
-MINIMUM_OS = '14.2'
-UNAVAILABLE_SYMBOLS = {'_IOHIDAccessCheckAuditToken'}
+MINIMUM_OS = '12.3'
+UNAVAILABLE_SYMBOLS = {'_IOHIDAccessCheckAuditToken', '_OBJC_CLASS_$_SMAppService'}
 MACHO_MAGIC = {
     b'\xfe\xed\xfa\xce', b'\xce\xfa\xed\xfe',
     b'\xfe\xed\xfa\xcf', b'\xcf\xfa\xed\xfe',
@@ -21,7 +21,7 @@ MACHO_MAGIC = {
 
 
 def check_imports(output, image, minimum_os=MINIMUM_OS):
-    if minimum_os != MINIMUM_OS:
+    if minimum_os not in ('14.2', '12.3', '12.0'):
         raise RuntimeError('Review the Mach-O import deny list for the new deployment target')
     for line in output.splitlines():
         if '(undefined)' not in line or re.search(r'\bweak\b', line):

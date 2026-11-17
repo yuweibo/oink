@@ -4,8 +4,9 @@
 //! 「输入监控」等授权仍然算在 `Oink.app` 上。系统在「系统设置 → 通用 → 登录项」的「登录时打开」里列出它，
 //! 用户可以在那里关掉；[`status`] 每次都读系统的状态。
 
+use objc2::msg_send;
+use objc2::runtime::{AnyClass, AnyObject};
 use objc2_foundation::{NSAppleEventManager, NSBundle, NSError};
-use objc2_service_management::{SMAppService, SMAppServiceStatus};
 
 use crate::{LaunchAtLoginProblem, LaunchAtLoginState, LaunchAtLoginStatus};
 
@@ -31,20 +32,21 @@ pub(crate) fn status() -> LaunchAtLoginStatus {
     if let Some(problem) = bundle_problem() {
         return LaunchAtLoginStatus::unavailable(problem);
     }
-    // SAFETY: 无参数的类方法，返回代表主程序包的服务对象。
-    let service = unsafe { SMAppService::mainAppService() };
-    // SAFETY: 只读属性，可以在任意线程读取。
-    let status = unsafe { service.status() };
+    let Some(cls) = AnyClass::get(c"SMAppService") else {
+        return LaunchAtLoginStatus::unavailable(LaunchAtLoginProblem::SystemUnavailable);
+    };
+    let service: *mut AnyObject = unsafe { msg_send![cls, mainAppService] };
+    if service.is_null() {
+        return LaunchAtLoginStatus::unavailable(LaunchAtLoginProblem::SystemUnavailable);
+    }
+    let status: isize = unsafe { msg_send![service, status] };
     match status {
-        SMAppServiceStatus::Enabled => LaunchAtLoginStatus::new(LaunchAtLoginState::Enabled, None),
-        SMAppServiceStatus::RequiresApproval => LaunchAtLoginStatus::new(
+        1 => LaunchAtLoginStatus::new(LaunchAtLoginState::Enabled, None),
+        2 => LaunchAtLoginStatus::new(
             LaunchAtLoginState::RequiresApproval,
             Some(LaunchAtLoginProblem::ApprovalRequired),
         ),
-        // 文档里「没有登记」是 NotRegistered，NotFound 说的是找不到辅助程序的 plist；但主程序包从未登记过时，
-        // 系统回答的是 NotFound（实测 macOS 14.7 与 26，已签名的 .app，原始值 3）。所以两者都算「未启用」，
-        // 不能把 NotFound 当成「不可用」——那样开关永远点不了。
-        SMAppServiceStatus::NotRegistered | SMAppServiceStatus::NotFound => {
+        0 | 3 => {
             LaunchAtLoginStatus::new(LaunchAtLoginState::Disabled, None)
         }
         _ => LaunchAtLoginStatus::unavailable(LaunchAtLoginProblem::SystemUnavailable),
@@ -55,17 +57,28 @@ pub(crate) fn set_enabled(enabled: bool) -> Result<LaunchAtLoginStatus, String> 
     if let Some(problem) = bundle_problem() {
         return Err(problem.code().into());
     }
-    // SAFETY: 同 `status`。
-    let service = unsafe { SMAppService::mainAppService() };
-    // SAFETY: 同步调用系统的登录项服务；不要求主线程。错误以 NSError 返回。
-    let result = unsafe {
+    let Some(cls) = AnyClass::get(c"SMAppService") else {
+        return Err(LaunchAtLoginProblem::SystemUnavailable.code().into());
+    };
+    let service: *mut AnyObject = unsafe { msg_send![cls, mainAppService] };
+    if service.is_null() {
+        return Err(LaunchAtLoginProblem::SystemUnavailable.code().into());
+    }
+    let mut err: *mut NSError = std::ptr::null_mut();
+    let ok: bool = unsafe {
         if enabled {
-            service.registerAndReturnError()
+            msg_send![service, registerAndReturnError: &mut err]
         } else {
-            service.unregisterAndReturnError()
+            msg_send![service, unregisterAndReturnError: &mut err]
         }
     };
-    crate::registration_result(enabled, result.map_err(|e| describe(&e)), status())
+    let result = if ok {
+        Ok(())
+    } else {
+        let err_ref = unsafe { err.as_ref() };
+        Err(err_ref.map(describe).unwrap_or_else(|| "login_item_update_failed".into()))
+    };
+    crate::registration_result(enabled, result, status())
 }
 
 fn describe(e: &NSError) -> String {
@@ -74,8 +87,15 @@ fn describe(e: &NSError) -> String {
 }
 
 pub(crate) fn open_system_settings() -> Result<(), String> {
-    // SAFETY: 无参数的类方法，打开系统设置的登录项页面。
-    unsafe { SMAppService::openSystemSettingsLoginItems() };
+    if let Some(cls) = AnyClass::get(c"SMAppService") {
+        unsafe {
+            let _: () = msg_send![cls, openSystemSettingsLoginItems];
+        }
+    } else {
+        let _ = std::process::Command::new("open")
+            .arg("/System/Applications/System Preferences.app")
+            .spawn();
+    }
     Ok(())
 }
 

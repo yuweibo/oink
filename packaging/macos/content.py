@@ -87,17 +87,18 @@ def verify_app(app, identity, architecture='arm64'):
     info = plistlib.loads((app / 'Contents/Info.plist').read_bytes())
     verify_product_name(app, info, identity['name'])
     group = mac['team_id'] + '.' + mac['app_group_suffix']
+    min_os = identity['macos_minimum']
     if (info['CFBundleIdentifier'], info['CFBundleExecutable'], info['LSMinimumSystemVersion'],
-            info[mac['app_group_key']]) != (identity['bundle_id'], b['backend'], '14.2', group):
+            info[mac['app_group_key']]) != (identity['bundle_id'], b['backend'], min_os, group):
         raise RuntimeError('Mac host identity, deployment target or App Group mismatch')
     helper = app / 'Contents/Helpers/Oink.app'
     ui = plistlib.loads((helper / 'Contents/Info.plist').read_bytes())
     verify_product_name(helper, ui, identity['name'])
-    if ui['CFBundleIdentifier'] != mac['ui_id'] or ui['LSMinimumSystemVersion'] != '14.2':
+    if ui['CFBundleIdentifier'] != mac['ui_id'] or ui['LSMinimumSystemVersion'] != min_os:
         raise RuntimeError('Mac UI bundle identity or deployment target mismatch')
     extension = app / 'Contents/PlugIns' / mac['file_provider_bundle']
     ext_info = plistlib.loads((extension / 'Contents/Info.plist').read_bytes())
-    if ext_info[mac['app_group_key']] != group or ext_info['LSMinimumSystemVersion'] != '14.2':
+    if ext_info[mac['app_group_key']] != group or ext_info['LSMinimumSystemVersion'] != min_os:
         raise RuntimeError('File Provider identity or deployment target mismatch')
     finder = app / 'Contents/PlugIns/OinkFinderSync.appex'
     finder_info = plistlib.loads((finder / 'Contents/Info.plist').read_bytes())
@@ -130,11 +131,15 @@ def verify_app(app, identity, architecture='arm64'):
         commands = subprocess.check_output(['otool', '-l', str(binary)], text=True)
         minimum = re.findall(r'^\s+minos\s+(\S+)', commands, re.MULTILINE)
         minimum += re.findall(r'cmd LC_VERSION_MIN_MACOSX\n.*?version\s+(\S+)', commands, re.DOTALL)
-        if arches != architecture or minimum not in (['14.2'], ['14.2.0']):
-            raise RuntimeError(f'Expected {architecture} and macOS 14.2 deployment target: {binary.name}')
+        target_min = identity['macos_minimum']
+        valid_min = [target_min]
+        if target_min.count('.') == 1:
+            valid_min.append(target_min + '.0')
+        if arches != architecture or minimum not in ([target_min], valid_min):
+            raise RuntimeError(f'Expected {architecture} and macOS {target_min} deployment target: {binary.name}')
         components.append({'role': role, 'path': binary.relative_to(app).as_posix(), 'sha256': digest(binary),
                            'image_identity': image_identity(binary),
-                           'architecture': architecture, 'minimum_os': '14.2', 'signature_verified': True})
+                           'architecture': architecture, 'minimum_os': target_min, 'signature_verified': True})
     for bundle, bundle_info in ((app, info), (helper, ui), (extension, ext_info), (finder, finder_info), (paste, paste_info)):
         verify_update_transport(bundle_info)
         verify_localizations(bundle, bundle_info, permissions=bundle == app)

@@ -124,9 +124,18 @@ func downloadReceivedTree(_ roots: [Record], parallelism: Int = 8,
 }
 
 private func downloadNative(_ manager: NSFileProviderManager, _ record: Record) async throws {
+    let sel = Selector(("requestDownloadForItemWithIdentifier:requestedRange:completionHandler:"))
+    guard (manager as AnyObject).responds(to: sel) else { return }
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-        manager.requestDownloadForItem(withIdentifier: .init(record.id), requestedRange: nil) { error in
-            if let error { continuation.resume(throwing: error) }
+        typealias Fn = @convention(c) (AnyObject, Selector, NSString, NSRange, @escaping @convention(block) (NSError?) -> Void) -> Void
+        guard let method = class_getInstanceMethod(type(of: manager), sel) else {
+            continuation.resume()
+            return
+        }
+        let imp = method_getImplementation(method)
+        let fn = unsafeBitCast(imp, to: Fn.self)
+        fn(manager, sel, record.id as NSString, NSRange(location: 0, length: 0)) { error in
+            if let error = error { continuation.resume(throwing: error) }
             else { continuation.resume() }
         }
     }

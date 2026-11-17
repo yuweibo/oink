@@ -4,7 +4,7 @@
   "bundle_id": "com.hachiwii.oink",
   "publisher": "Oink contributors",
   "repository_org": "oinkvm",
-  "macos_minimum": "14.2",
+  "macos_minimum": "12.3",
   "windows_minimum": "10.0",
   "minimumWindowsBuild": 17763,
   "data_directory": "Oink",

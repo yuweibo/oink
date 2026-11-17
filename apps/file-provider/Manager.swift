@@ -267,10 +267,20 @@ private var nativeWatchdog: DispatchSourceTimer?
                     let preparedURL = try await prepareSpareDirectory(resolve: {
                         try await manager.getUserVisibleURL(for: item)
                     }, download: {
-                        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                            manager.requestDownloadForItem(withIdentifier: item, requestedRange: nil) { error in
-                                if let error { continuation.resume(throwing: error) }
-                                else { continuation.resume() }
+                        let sel = Selector(("requestDownloadForItemWithIdentifier:requestedRange:completionHandler:"))
+                        if (manager as AnyObject).responds(to: sel) {
+                            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                                typealias Fn = @convention(c) (AnyObject, Selector, NSString, NSRange, @escaping @convention(block) (NSError?) -> Void) -> Void
+                                guard let method = class_getInstanceMethod(type(of: manager), sel) else {
+                                    continuation.resume()
+                                    return
+                                }
+                                let imp = method_getImplementation(method)
+                                let fn = unsafeBitCast(imp, to: Fn.self)
+                                fn(manager, sel, item.rawValue as NSString, NSRange(location: 0, length: 0)) { error in
+                                    if let error = error { continuation.resume(throwing: error) }
+                                    else { continuation.resume() }
+                                }
                             }
                         }
                     }, materialized: { url in
