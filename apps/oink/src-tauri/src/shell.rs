@@ -286,7 +286,7 @@ pub fn shell_ready(app: AppHandle, window: tauri::WebviewWindow, generation: u32
         return;
     }
     #[cfg(target_os = "macos")]
-    tracing::debug!(view = window.label(), generation, "window presentation: DOM ready");
+    tracing::info!(view = window.label(), generation, "window presentation: DOM ready");
     crate::app::on_main(&app, move |app| {
         let ready = {
             let shell = app.state::<Shell>();
@@ -389,22 +389,34 @@ fn create_normal(app: &AppHandle, view: View) -> tauri::Result<()> {
         #[cfg(windows)]
         return finish_normal_windows(app, window, created, created && view == View::Main);
         #[cfg(target_os = "macos")]
-        {
-            let reveal = {
-                let shell = app.state::<Shell>();
-                let mut gate = shell.window_ready.lock().unwrap();
-                if created {
-                    gate.created(label)
-                } else {
-                    gate.can_show(label)
-                }
-            };
-            if reveal {
-                show_normal(app, &window)?;
-            }
-        }
+        return finish_normal_macos(app, window, created);
     }
     Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn finish_normal_macos(
+    app: &AppHandle,
+    window: tauri::WebviewWindow,
+    created: bool,
+) -> tauri::Result<()> {
+    let handle = app.clone();
+    on_ui(app, move || {
+        let is_macos_12 = objc2_foundation::NSProcessInfo::processInfo().operatingSystemVersion().majorVersion < 14;
+        let reveal = {
+            let shell = handle.state::<Shell>();
+            let mut gate = shell.window_ready.lock().unwrap();
+            if created {
+                gate.created(window.label())
+            } else {
+                gate.can_show(window.label())
+            }
+        };
+        if reveal || is_macos_12 {
+            show_normal(&handle, &window)?;
+        }
+        Ok(())
+    })
 }
 
 /// The worker may wait for native UI work, but UI callbacks never wait for the
@@ -489,7 +501,8 @@ fn show_normal(_app: &AppHandle, window: &tauri::WebviewWindow) -> tauri::Result
     {
         // AppKit activation and all native preparation stay on its main thread.
         let mtm = objc2::MainThreadMarker::new().expect("normal window on main thread");
-        objc2_app_kit::NSApplication::sharedApplication(mtm).activate();
+        let app = objc2_app_kit::NSApplication::sharedApplication(mtm);
+        crate::window_paint_macos::activate_app(&app);
     }
     #[cfg(not(windows))]
     focus_window(window)?;

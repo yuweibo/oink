@@ -2,7 +2,7 @@
 use block2::RcBlock;
 use objc2::{MainThreadMarker, rc::Retained};
 use objc2_app_kit::{NSApplication, NSImage, NSWindow};
-use objc2_foundation::NSError;
+use objc2_foundation::{NSError, NSObjectProtocol};
 use objc2_web_kit::{WKSnapshotConfiguration, WKWebView};
 use tauri::{AppHandle, Manager, WebviewWindow};
 
@@ -12,16 +12,30 @@ fn native(window: &WebviewWindow) -> tauri::Result<Retained<NSWindow>> {
     Ok(unsafe { Retained::retain(window.ns_window()?.cast::<NSWindow>()) }.expect("Tauri NSWindow"))
 }
 
+pub(crate) fn activate_app(app: &NSApplication) {
+    if app.respondsToSelector(objc2::sel!(activate)) {
+        app.activate();
+    } else {
+        #[allow(deprecated)]
+        app.activateIgnoringOtherApps(true);
+    }
+}
+
 pub(crate) fn show(app: &AppHandle, window: &WebviewWindow) -> tauri::Result<()> {
     let native = native(window)?;
     let mtm = MainThreadMarker::new().expect("window presentation on AppKit thread");
     let application = NSApplication::sharedApplication(mtm);
     if native.isVisible() && !native.isMiniaturized() && !application.isHidden() && native.alphaValue() > 0.0 {
         if !window.is_focused()? {
-            application.activate();
+            activate_app(&application);
             window.set_focus()?;
         }
         return Ok(());
+    }
+    // On macOS < 14, WebKit's takeSnapshotWithConfiguration with afterScreenUpdates: true
+    // on an ordered-out / invisible window does not complete. Reveal the window directly.
+    if objc2_foundation::NSProcessInfo::processInfo().operatingSystemVersion().majorVersion < 14 {
+        return reveal(app, window);
     }
     let Some(ticket) = app
         .state::<crate::shell::Shell>()
@@ -121,7 +135,7 @@ fn reveal(app: &AppHandle, window: &WebviewWindow) -> tauri::Result<()> {
     tracing::debug!(view = window.label(), "window presentation: window.show");
     window.show()?;
     let mtm = MainThreadMarker::new().expect("window presentation on AppKit thread");
-    NSApplication::sharedApplication(mtm).activate();
+    activate_app(&NSApplication::sharedApplication(mtm));
     window.set_focus()?;
     tracing::info!(view = window.label(), "ready product window shown");
     crate::live_views::refresh(app);
@@ -129,6 +143,17 @@ fn reveal(app: &AppHandle, window: &WebviewWindow) -> tauri::Result<()> {
 }
 
 pub(crate) fn visibility(app: &AppHandle, window: &WebviewWindow, visible: bool) -> tauri::Result<()> {
+    if objc2_foundation::NSProcessInfo::processInfo().operatingSystemVersion().majorVersion < 14 {
+        return if visible {
+            reveal(app, window)
+        } else {
+            let native = native(window)?;
+            native.setAlphaValue(0.0);
+            native.setIgnoresMouseEvents(true);
+            let webview: &tauri::Webview = window.as_ref();
+            webview.hide()
+        };
+    }
     if app
         .state::<crate::shell::Shell>()
         .paint
