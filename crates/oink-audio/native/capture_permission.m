@@ -29,24 +29,29 @@ static void *tcc_library(void) {
 // never open a tap to poll, and never persist a presumed grant.
 bool oink_audio_capture_preflight(const char *symbol, uint64_t *result,
                                   char *error, size_t error_size) {
-    void *handle = tcc_library();
-    if (!handle) {
-        snprintf(error, error_size, "TCC dlopen failed: %s", dlerror());
+    if (@available(macOS 14.2, *)) {
+        void *handle = tcc_library();
+        if (!handle) {
+            snprintf(error, error_size, "TCC dlopen failed: %s", dlerror());
+            return false;
+        }
+        uint64_t (*preflight)(CFStringRef) = dlsym(handle, symbol);
+        if (!preflight) {
+            snprintf(error, error_size, "TCC dlsym failed: %s", dlerror());
+            return false;
+        }
+        bool ok = true;
+        @try {
+            *result = preflight(CFSTR("kTCCServiceAudioCapture"));
+        } @catch (NSException *exception) {
+            snprintf(error, error_size, "TCC preflight exception: %s", exception.name.UTF8String);
+            ok = false;
+        }
+        return ok;
+    } else {
+        snprintf(error, error_size, "System audio capture is not supported on macOS < 14.2");
         return false;
     }
-    uint64_t (*preflight)(CFStringRef) = dlsym(handle, symbol);
-    if (!preflight) {
-        snprintf(error, error_size, "TCC dlsym failed: %s", dlerror());
-        return false;
-    }
-    bool ok = true;
-    @try {
-        *result = preflight(CFSTR("kTCCServiceAudioCapture"));
-    } @catch (NSException *exception) {
-        snprintf(error, error_size, "TCC preflight exception: %s", exception.name.UTF8String);
-        ok = false;
-    }
-    return ok;
 }
 
 // Only an explicit Grant action enters this path in the responsible backend.
@@ -55,12 +60,15 @@ bool oink_audio_capture_preflight(const char *symbol, uint64_t *result,
 // completion is an authorization right, not a Boolean. Do not block the IPC
 // worker for the lifetime of a user dialog or mistake submission for a grant.
 int32_t oink_audio_capture_request(void (*completion)(uint64_t)) {
-    void *handle = tcc_library();
-    if (!handle) return -1;
-    void (*request)(CFStringRef, CFDictionaryRef, void (^)(uint64_t)) = dlsym(handle, "tcc_authorization_request");
-    if (!request) return -1;
-    request(CFSTR("kTCCServiceAudioCapture"), NULL, ^(uint64_t right) {
-        completion(right);
-    });
-    return 0;
+    if (@available(macOS 14.2, *)) {
+        void *handle = tcc_library();
+        if (!handle) return -1;
+        void (*request)(CFStringRef, CFDictionaryRef, void (^)(uint64_t)) = dlsym(handle, "tcc_authorization_request");
+        if (!request) return -1;
+        request(CFSTR("kTCCServiceAudioCapture"), NULL, ^(uint64_t right) {
+            completion(right);
+        });
+        return 0;
+    }
+    return -1;
 }

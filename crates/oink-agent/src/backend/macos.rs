@@ -83,10 +83,12 @@ fn request_window() {
     // covers a helper that has not been started yet (public AppKit contract).
     let identifier = NSString::from_str("com.hachiwii.oink.ui");
     let running = objc2_app_kit::NSRunningApplication::runningApplicationsWithBundleIdentifier(&identifier);
-    if let Some(helper) = running.firstObject() {
-        app.yieldActivationToApplication(&helper);
-    } else {
-        app.yieldActivationToApplicationWithBundleIdentifier(&identifier);
+    if app.respondsToSelector(sel!(yieldActivationToApplicationWithBundleIdentifier:)) {
+        if let Some(helper) = running.firstObject() {
+            app.yieldActivationToApplication(&helper);
+        } else {
+            app.yieldActivationToApplicationWithBundleIdentifier(&identifier);
+        }
     }
     if let Err(error) = super::show_ui() {
         // A reopen event can arrive while the startup worker is still preparing
