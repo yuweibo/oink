@@ -23,7 +23,7 @@ members = [
 [workspace.package]
 version = "0.3.6"
 edition = "2024"
-rust-version = "1.99.0"
+rust-version = "1.85.0"
 license = "GPL-3.0-only"
 # 内部 crate，不发布到 crates.io
 publish = false

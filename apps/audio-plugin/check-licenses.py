@@ -3,7 +3,47 @@
 import hashlib
 import json
 from pathlib import Path
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:
+    try:
+        import tomli as tomllib
+    except ModuleNotFoundError:
+        import re
+        class MiniToml:
+            @staticmethod
+            def loads(s):
+                data = {"licenses": {"allow": [], "exceptions": []}}
+                in_licenses, in_allow, in_exception = False, False, False
+                cur_exc = {}
+                for line in s.splitlines():
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if line == "[licenses]":
+                        in_licenses, in_exception = True, False
+                    elif line == "[[licenses.exceptions]]":
+                        in_licenses, in_exception = False, True
+                        cur_exc = {}
+                        data["licenses"]["exceptions"].append(cur_exc)
+                    elif line.startswith("["):
+                        in_licenses, in_exception = False, False
+                    elif in_licenses:
+                        if line.startswith("allow"):
+                            in_allow = True
+                        if in_allow:
+                            data["licenses"]["allow"].extend(re.findall(r'"([^"]+)"', line))
+                            if "]" in line:
+                                in_allow = False
+                    elif in_exception and "=" in line:
+                        k, v = line.split("=", 1)
+                        k, v = k.strip(), v.strip()
+                        if v.startswith("["):
+                            cur_exc[k] = re.findall(r'"([^"]+)"', v)
+                        else:
+                            cur_exc[k] = v.strip('"')
+                return data
+        tomllib = MiniToml()
 import sys
 
 def require(condition, message):
