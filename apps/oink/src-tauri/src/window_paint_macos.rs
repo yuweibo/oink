@@ -26,6 +26,12 @@ pub(crate) fn show(app: &AppHandle, window: &WebviewWindow) -> tauri::Result<()>
     let mtm = MainThreadMarker::new().expect("window presentation on AppKit thread");
     let application = NSApplication::sharedApplication(mtm);
     if native.isVisible() && !native.isMiniaturized() && !application.isHidden() && native.alphaValue() > 0.0 {
+        let webview: &tauri::Webview = window.as_ref();
+        let _ = webview.show();
+        let _ = window.with_webview(|w| {
+            let view = unsafe { &*w.inner().cast::<WKWebView>() };
+            view.setHidden(false);
+        });
         if !window.is_focused()? {
             activate_app(&application);
             window.set_focus()?;
@@ -132,6 +138,12 @@ fn reveal(app: &AppHandle, window: &WebviewWindow) -> tauri::Result<()> {
     window.unminimize()?;
     native.setAlphaValue(1.0);
     native.setIgnoresMouseEvents(false);
+    let webview: &tauri::Webview = window.as_ref();
+    let _ = webview.show();
+    let _ = window.with_webview(|w| {
+        let view = unsafe { &*w.inner().cast::<WKWebView>() };
+        view.setHidden(false);
+    });
     tracing::debug!(view = window.label(), "window presentation: window.show");
     window.show()?;
     let mtm = MainThreadMarker::new().expect("window presentation on AppKit thread");

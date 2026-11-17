@@ -15,11 +15,25 @@ if(hotkeyPreview) {
 } else if(preview) {
  void import('./arrange/GroupPreview').then(({GroupPreview})=>createRoot(document.getElementById('root')!).render(<StrictMode><GroupPreview/></StrictMode>));
 } else {
- // Resolve the route, platform and preferences before React's first render.
- // start() subscribes before querying, preserving events during initial load.
- void start(new URLSearchParams(location.search).get('view') ?? 'main').then(() => {
-  const preferences = agent.get().localPreferences;
-  if (preferences) setLanguage(preferences.ui_language);
-  createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);
- });
+ (window as any).__TAURI_INTERNALS__?.invoke?.('frontend_error', { message: 'main.tsx loaded, view=' + (new URLSearchParams(location.search).get('view') ?? 'main') });
+ const mount = () => {
+   const root = document.getElementById('root');
+   if (!root || (root as any)._mounted) return;
+   (root as any)._mounted = true;
+   (window as any).__TAURI_INTERNALS__?.invoke?.('frontend_error', { message: 'main.tsx mounting React App' });
+   const preferences = agent.get().localPreferences;
+   if (preferences) setLanguage(preferences.ui_language);
+   createRoot(root).render(<StrictMode><App /></StrictMode>);
+ };
+ const timer = setTimeout(mount, 300);
+ void start(new URLSearchParams(location.search).get('view') ?? 'main')
+   .then(() => {
+     clearTimeout(timer);
+     mount();
+   })
+   .catch((err) => {
+     clearTimeout(timer);
+     (window as any).__TAURI_INTERNALS__?.invoke?.('frontend_error', { message: 'start error: ' + String(err) });
+     mount();
+   });
 }

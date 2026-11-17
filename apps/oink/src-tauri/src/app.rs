@@ -10,11 +10,11 @@ use oink_agent::remote::RemoteApi;
 
 use crate::boot::BootInfo;
 
-pub(crate) const ERROR_REPORTER: &str = r#"window.addEventListener('keydown',e=>{if(e.key==='Escape'&&new URLSearchParams(location.search).get('view')==='panel'){e.preventDefault();window.__TAURI_INTERNALS__?.invoke('shell_close')}});window.addEventListener('error',e=>window.__TAURI_INTERNALS__?.invoke('frontend_error',{message:String(e.error||e.message)}));window.addEventListener('unhandledrejection',e=>window.__TAURI_INTERNALS__?.invoke('frontend_error',{message:String(e.reason)}));"#;
+pub(crate) const ERROR_REPORTER: &str = r#"window.__TAURI_INTERNALS__?.invoke('frontend_error',{message:'INIT_SCRIPT_OK: '+location.href});window.addEventListener('keydown',e=>{if(e.key==='Escape'&&new URLSearchParams(location.search).get('view')==='panel'){e.preventDefault();window.__TAURI_INTERNALS__?.invoke('shell_close')}});window.addEventListener('error',e=>window.__TAURI_INTERNALS__?.invoke('frontend_error',{message:String(e.error||e.message)}));window.addEventListener('unhandledrejection',e=>window.__TAURI_INTERNALS__?.invoke('frontend_error',{message:String(e.reason)}));"#;
 
 #[tauri::command]
 fn frontend_error(message: String) {
-    tracing::warn!(%message, "界面脚本错误");
+    tracing::info!(%message, "frontend_log");
 }
 
 /// 原先显示在窗口底部中央的提示，现在只写进日志。

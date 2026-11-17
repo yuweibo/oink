@@ -37,7 +37,7 @@ reqwest = { version = "0.12.28", default-features = false, features = ["rustls-t
 # 产品只支持 macOS 与 Windows：其他系统上只编译与平台无关的部分（JSON 约定测试），
 # 这样 Linux CI 不需要安装 WebKitGTK 等系统依赖。
 [target.'cfg(any(target_os = "macos", windows))'.dependencies]
-tauri = { version = "~2.12.4", features = ["tray-icon", "image-png"] }
+tauri = { version = "~2.12.4", features = ["tray-icon", "image-png", "custom-protocol"] }
 
 [target.'cfg(any(target_os = "macos", windows))'.build-dependencies]
 tauri-build = { version = "~2.7.3", features = [] }

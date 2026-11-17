@@ -401,22 +401,38 @@ fn finish_normal_macos(
     created: bool,
 ) -> tauri::Result<()> {
     let handle = app.clone();
+    let win = window.clone();
     on_ui(app, move || {
-        let is_macos_12 = objc2_foundation::NSProcessInfo::processInfo().operatingSystemVersion().majorVersion < 14;
         let reveal = {
             let shell = handle.state::<Shell>();
             let mut gate = shell.window_ready.lock().unwrap();
             if created {
-                gate.created(window.label())
+                gate.created(win.label())
             } else {
-                gate.can_show(window.label())
+                gate.can_show(win.label())
             }
         };
-        if reveal || is_macos_12 {
-            show_normal(&handle, &window)?;
+        if reveal {
+            show_normal(&handle, &win)?;
         }
         Ok(())
-    })
+    })?;
+    let fallback_app = app.clone();
+    let fallback_window = window;
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+        let handle = fallback_app.clone();
+        let _ = on_ui(&fallback_app, move || {
+            let shell = handle.state::<Shell>();
+            let gate = shell.window_ready.lock().unwrap();
+            if !gate.can_show(fallback_window.label()) {
+                tracing::info!(view = fallback_window.label(), "fallback revealing window after timeout");
+                let _ = show_normal(&handle, &fallback_window);
+            }
+            Ok(())
+        });
+    });
+    Ok(())
 }
 
 /// The worker may wait for native UI work, but UI callbacks never wait for the
